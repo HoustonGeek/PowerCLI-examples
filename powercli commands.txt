@@ -1,5 +1,5 @@
 #Connect to ESXi or vcenter
-connect-viserver 192.168.0.107 -User root -Password internet11a
+connect-viserver 192.168.0.107 -User root -Password xxxx
 
 #Get the list of VMhosts, if on ESXi, will only have one
 $vmhost = Get-VMHost 
