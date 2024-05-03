@@ -38,6 +38,12 @@ $vswitch3 = New-VirtualSwitch -Host $vmhost -Name vSwitch3 -Nic vmnic1
 #End the session to the esxi/vcenter server:
 Disconnect-viserver 192.168.0.107  -Confirm:$false
 
+#Removing configurations
+ 
+Get-VirtualSwitch -VMHost $vmhost -Name "vSwitch2" | Remove-VirtualSwitch -Confirm:$false
+Get-VirtualSwitch -VMHost $vmhost -Name "vSwitch3" | Remove-VirtualSwitch -Confirm:$false
+Get-VirtualSwitch -VMHost $vmhost -Name "vSwitch1" | Remove-VirtualSwitch -Confirm:$false 
+
 
 #For new server - Create a vswitch and add port groups with vlan tags
 
