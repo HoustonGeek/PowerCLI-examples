@@ -1,0 +1,113 @@
+#Connect to ESXi or vcenter
+connect-viserver 192.168.0.107 
+Get-Cluster -Name name
+#Get the list of VMhosts, if on ESXi, will only have one
+$vmhost = Get-VMHost -Location LAB-DVX-HX
+
+#Use for a loop for all hosts - the commands will need to use $host 
+foreach ($host in $vmHost) {
+  $vswitchzero = Get-VirtualSwitch -name LAB-DVX-HX
+}
+
+#some commands
+
+Get the object for a vSwitch - can change options or create port groups:
+$vswitchzero = Get-VirtualSwitch -name vSwitch0
+
+#Change a port group to rename it
+Get-VirtualPortGroup -VirtualSwitch $vswitchzero -Name "VM Network" | Set-VirtualPortGroup -Name "Public_Network" 
+
+#Add an object for a vmnic
+$vmnic3 = $vmhost | Get-VMhostNetworkAdapter -Physical -Name vmnic3
+
+#Add the vmnic to a vswitch
+$addvmnic = $vswitchzero | Add-VirtualSwitchPHysicalNEtworkAdapter -VMHostPHysicalnic $vmnic3 -Confirm:$false
+
+#get the port group object
+$mgmt = Get-VirtualPortGroup -VirtualSwitch $vswitchzero -Name "Management Network"
+
+# change the nic teaming policy for active/standby (useful for mgmt and iSCSI):
+Get-NicTeamingPolicy -VirtualPortGroup $mgmt | Set-NicTeamingPolicy -makeNICactive vmnic2 -makenicstandby vmnic3
+
+#Create new virtual switches
+$vswitch1 = New-VirtualSwitch -Host $vmhost -Name vSwitch1 -Nic vmnic4,vmnic5
+
+$vswitch2 = New-VirtualSwitch -Host $vmhost -Name vSwitch2 -Nic vmnic0
+
+$vswitch3 = New-VirtualSwitch -Host $vmhost -Name vSwitch3 -Nic vmnic1
+
+#End the session to the esxi/vcenter server:
+Disconnect-viserver 192.168.0.107  -Confirm:$false
+
+#Removing configurations
+ 
+Get-VirtualSwitch -VMHost $vmhost -Name "vSwitch2" | Remove-VirtualSwitch -Confirm:$false
+Get-VirtualSwitch -VMHost $vmhost -Name "vSwitch3" | Remove-VirtualSwitch -Confirm:$false
+Get-VirtualSwitch -VMHost $vmhost -Name "vSwitch1" | Remove-VirtualSwitch -Confirm:$false 
+
+
+#For new server - Create a vswitch and add port groups with vlan tags
+
+$vswitchA = New-VirtualSwitch -Host $vmhost -Name vSwitch2
+New-VirtualPortGroup -VirtualSwitch $vswitchA -Name "Citrix" -VLanId 40
+New-VirtualPortGroup -VirtualSwitch $vswitchA -Name "DMZ" -VLanId 25
+New-VirtualPortGroup -VirtualSwitch $vswitchA -name "Exchange_Rep" -Vlanid 12
+New-VirtualPortGroup -VirtualSwitch $vswitchA -name "ISE Network"
+New-VirtualPortGroup -VirtualSwitch $vswitchA -Name "VDI" -VLanId 52
+New-VirtualPortGroup -VirtualSwitch $vswitchA -Name "VLAN 51" -VLanId 51
+New-VirtualPortGroup -VirtualSwitch $vswitchA -Name "VM Network" 
+New-VirtualPortGroup -VirtualSwitch $vswitchA -Name "Voice_Vlan" -VLanId 15
+
+$vswitchB = New-VirtualSwitch -Host $vmhost -Name vSwitch3
+$vswitchC = New-VirtualSwitch -Host $vmhost -Name vSwitch4
+$vswitchD = New-VirtualSwitch -Host $vmhost -Name vSwitch5
+
+#Setup a new vswitch, a new network adapter with ip address and mtu
+
+$vswitchB = New-VirtualSwitch -Host $vmhost -Name vSwitch2 -Nic vmnic4,vmnic5 -Mtu 1500
+$vmnfs = New-VMHostNetworkAdapter -VirtualSwitch $vswitchB -PortGroup "NFS" -IP "10.100.100.11" -subnetmask "255.255.255.0" -Mtu 1500
+$nfs = Get-VirtualPortGroup -Name "NFS"| Set-VirtualPortGroup -vlanid 900
+
+#More examples
+
+foreach ($vmhost in Get-VMhost) {
+$vswitchA = New-VirtualSwitch -Host $vmhost -Name vSwitch4 -Nic vmnic10 -Mtu 1500
+New-VirtualPortGroup -VirtualSwitch $vswitchA -Name "SPAN 1" 
+$vswitchB = New-VirtualSwitch -Host $vmhost -Name vSwitch5 -Nic vmnic11 -Mtu 1500
+New-VirtualPortGroup -VirtualSwitch $vswitchB -Name "SPAN 2"
+}
+
+foreach ($vmhost in Get-VMhost) {
+$vswitchA = Get-VirtualSwitch -Host $vmhost -Name vSwitch2 
+Get-VirtualPortGroup -VirtualSwitch $vswitchA -Name "VLAN 150" | Set-VirtualPortGroup -Name "VLAN 150 - MGMT" 
+Get-VirtualPortGroup -VirtualSwitch $vswitchA -Name "VLAN 100" | Set-VirtualPortGroup -Name "VLAN 100 - SVC" 
+Get-VirtualPortGroup -VirtualSwitch $vswitchA -Name "VLAN 110" | Set-VirtualPortGroup -Name "VLAN 110 - DMZ" 
+Get-VirtualPortGroup -VirtualSwitch $vswitchA -Name "VLAN 120" | Set-VirtualPortGroup -Name "VLAN 120 - JUMP" 
+}
+
+
+\<# $vswitch2 = New-VirtualSwitch -Host $vmhost -Name vSwitch2 -Nic vmnic4,vmnic5 -NumPorts 120 -Mtu 9000
+$vmiscsia = New-VirtualPortGroup -VirtualSwitch $vswitch2 -Name "VM iSCSI A" -VLanid 39
+Get-NicTeamingPolicy -VirtualPortGroup $vmiscsia | Set-NicTeamingPolicy -MakeNICactive vmnic4 -MakeNicunused vmnic5
+$vmiscsib = New-VirtualPortGroup -VirtualSwitch $vswitch2 -Name "VM iSCSI B" -Vlanid 40
+Get-NicTeamingPolicy -VirtualPortGroup $vmiscsib | Set-NicTeamingPolicy -MakeNICactive vmnic5 -MakeNicunused vmnic4 #>
+
+
+Disconnect-viserver 172.20.253.101 -Confirm:$false
+
+Stop-VMHost 10.157.149.40 -Force -Confirm:$false
+
+----===== LAB  ======-----
+#Setup loadbalancing
+connect-viserver 10.254.1.12 -User root -Password ESX1234!
+$vswitchA = Get-VirtualSwitch -Name vSwitch0 | Set-VirtualSwitch -Nic vmnic1,vmnic2 
+Get-NicTeamingPolicy -VirtualSwitch $vswitchA | Set-NicTeamingPolicy -FailbackEnabled $false -LoadBalancingPolicy LoadBalanceIP
+
+#Setup iSCSI with failover
+$vswitchC = New-VirtualSwitch -Host $vmhost -Name vSwitch1 -Nic vmnic1,vmnic2 -NumPorts 120 -Mtu 9000
+$vmiscsia = New-VMHostNetworkAdapter -VirtualSwitch $vswitchC -PortGroup "iSCSI A" -IP "192.168.250.12" -subnetmask "255.255.255.0" -Mtu 9000
+$iscsia = Get-VirtualPortGroup -Name "iSCSI A"| Set-VirtualPortGroup -vlanid 2000
+Get-NicTeamingPolicy -VirtualPortGroup $iscsia | Set-NicTeamingPolicy -MakeNICactive vmnic0 -MakeNicunused vmnic3
+$vmiscsib = New-VMHostNetworkAdapter -VirtualSwitch $vswitchC -PortGroup "iSCSI B" -IP "192.168.251.12" -subnetmask "255.255.255.0" -Mtu 9000
+$iscsib = Get-VirtualPortGroup -Name "iSCSI B" | Set-VirtualPortGroup -vlanid 2001
+Get-NicTeamingPolicy -VirtualPortGroup $iscsib | Set-NicTeamingPolicy -MakeNICactive vmnic3 -MakeNicunused vmnic0
